@@ -115,7 +115,7 @@ def download_packages(package_list, download_dir):
     for package_name in package_list:
         """
         Attempts to download a single NuGet package.
-        If it fails, it prints an error and returns None, exiting the function.
+        If it fails, print error and return None. Exiting the function.
         """
         print(f"\t{package_name}\n")
     
@@ -287,13 +287,80 @@ def extract_nupkg_files():
     else:
         print(f"No matching {TARGET_EXTENSION} files were found.")
 
-def yee():
+
+def find_latest_whale_puup_folder(base_dir):
+    """
+    Scans the base directory for the most recently created folder 
+    starting with 'whale_puup_'
+    """
+    search_pattern = os.path.join(base_dir, 'whale_puup_*')
+    
+    # Use glob to find all matching folders
+    matching_folders = glob.glob(search_pattern)
+    
+    # Filter out files, keeping only directories
+    dirs = [d for d in matching_folders if os.path.isdir(d)]
+    
+    if not dirs:
+        return None, None
+
+    # Find the most recently modified directory
+    # os.path.getmtime returns the modification time (timestamp)
+    latest_dir = max(dirs, key=os.path.getmtime)
+    
+    # Get the timestamp for the zip file name
+    timestamp = os.path.getmmtime(latest_dir)
+    time_struct = time.localtime(timestamp)
+    # Format the time from the folder's timestamp
+    formatted_time = time.strftime("%Y%m%d_%H%M%S", time_struct) 
+    
+    return latest_dir, formatted_time
+
+def create_zip_archive():
+    """
+    Finds the latest 'whale_puup' folder and zips it into a .zip archive.
+    """
+    
+    # Use the script's directory for robust path resolution
+    script_dir = os.path.dirname(os.path.abspath(sys.argv[0]))
+    
+    print("--- NuGet Package Archiver ---")
+    
+    # Find the directory to be zipped
+    source_dir, timestamp = find_latest_whale_puup_folder(script_dir)
+    
+    if not source_dir:
+        print("\nError: No 'whale_puup_...' folder found in the executable's directory.")
+        print("Please ensure you have run the nuget_extractor.py first.")
+        return
+
+    # Prepare the output name for the zip file
+    base_name = f"whale_puup_archive_{timestamp}"
+    
+    print(f"Found latest folder: '{os.path.basename(source_dir)}'")
+    print(f"Creating zip file: '{base_name}.zip'")
+    
+    try:
+        # shutil.make_archive creates the zip file
+        # 'zip' is the format, base_name is the output name, and source_dir 
+        # is the directory to be compressed.
+        archive_path = shutil.make_archive(base_name, 'zip', root_dir=script_dir, base_dir=os.path.basename(source_dir))
+        
+        print("\n--- Summary ---")
+        print(f"SUCCESS: Archive created at '{os.path.abspath(archive_path)}'")
+        print(f"Contents of the folder '{os.path.basename(source_dir)}' are now securely zipped.")
+
+    except Exception as e:
+        print(f"\nError creating zip archive: {e}")
+
+def main():
     """Main method to orchestrate the entire process."""
     while True:
         try:
-             # 1. Get package input from user/command line
+            # Get list of nuget packages (comma-dilimited, possibly) and make into list
             package_list_str = show_whale_prompt()
             packages = [p.strip() for p in package_list_str.split(',') if p.strip()]
+            
             if not packages:
                 print("\nProcess canceled.")
                 continue
@@ -302,7 +369,7 @@ def yee():
             output = download_packages(packages, 'temp_downloads')
          
             # 4. Break the loop only on success
-            break 
+            break
             
         except subprocess.CalledProcessError as e:
             # 5. Handle the specific error thrown by subprocess (NuGet failure)
@@ -365,9 +432,6 @@ def yee():
                 print(f"\n🗑️ Cleaned up temporary folder: {TEMP_DOWNLOAD_FOLDER}")
             except OSError as e:
                 print(f"  ⚠️ Warning: Could not remove temporary folder {TEMP_DOWNLOAD_FOLDER}. {e}")
-
-def main():
-    extract_nupkg_files()
 
 if __name__ == "__main__":
     main()
