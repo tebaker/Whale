@@ -5,7 +5,10 @@ import datetime
 import base64
 import argparse
 import shutil
+import glob
 import xml.etree.ElementTree as ET
+
+import zipfile
 
 # --- Configuration ---
 # You must have nuget.exe accessible in your system's PATH
@@ -14,6 +17,7 @@ NUGET_CMD = r'C:\Program Files (x86)\NuGet\nuget.exe'
 TEMP_DOWNLOAD_FOLDER = "temp_downloads"
 # The file extension we are looking for.
 TARGET_EXTENSION = ".nupkg"
+OUTPUT_BASE_PATH = "final_archives"
 
 def show_whale_prompt():
     """Displays the ASCII whale and prompts the user for package names."""
@@ -46,6 +50,9 @@ def show_whale_prompt():
 
 def download_nuget_packages(package_list, download_dir):
     print("Puuping:\n")
+
+    nugetPackagesDownloaded = 0
+
     for package_name in package_list:
         """
         Attempts to download a single NuGet package.
@@ -84,8 +91,10 @@ def download_nuget_packages(package_list, download_dir):
             print(f"🛑 CRITICAL ERROR: Could not find nuget.exe at path: {NUGET_CMD}")
             return None
         
+        nugetPackagesDownloaded+=1
+        
     # If successful, return the output (or a success indicator)
-    return result.stdout
+    return nugetPackagesDownloaded
 
 def encode_file_to_base64(input_filepath, output_filepath):
     """
@@ -221,71 +230,71 @@ def extract_nupkg_files():
     else:
         print(f"No matching {TARGET_EXTENSION} files were found.")
 
-def find_latest_whale_puup_folder(base_dir):
-    """
-    Scans the base directory for the most recently created folder 
-    starting with 'whale_puup_'
-    """
-    search_pattern = os.path.join(base_dir, 'whale_puup_*')
-    
-    # Use glob to find all matching folders
-    matching_folders = glob.glob(search_pattern)
-    
-    # Filter out files, keeping only directories
-    dirs = [d for d in matching_folders if os.path.isdir(d)]
-    
-    if not dirs:
-        return None, None
+    return DESTINATION_DIR
 
-    # Find the most recently modified directory
-    # os.path.getmtime returns the modification time (timestamp)
-    latest_dir = max(dirs, key=os.path.getmtime)
-    
-    # Get the timestamp for the zip file name
-    timestamp = os.path.getmmtime(latest_dir)
-    time_struct = time.localtime(timestamp)
-    # Format the time from the folder's timestamp
-    formatted_time = time.strftime("%Y%m%d_%H%M%S", time_struct) 
-    
-    return latest_dir, formatted_time
-
-def create_zip_archive():
+def create_zip_archive(source_folder_path):
     """
-    Finds the latest 'whale_puup' folder and zips it into a .zip archive.
+    Creates a ZIP archive of the contents of the given source_folder_path
+    and places the resulting ZIP file inside that same folder.
+    
+    Args:
+        source_folder_path (str): The absolute path to the directory containing 
+                                  the extracted NuGet packages.
+                                  
+    Returns:
+        str: The absolute path to the newly created ZIP file.
     """
-    
-    # Use the script's directory for robust path resolution
-    script_dir = os.path.dirname(os.path.abspath(sys.argv[0]))
-    
     print("--- NuGet Package Archiver ---")
     
-    # Find the directory to be zipped
-    source_dir, timestamp = find_latest_whale_puup_folder(script_dir)
+    # 1. Define the base name of the ZIP file
+    # We use the existing folder name (e.g., 'whale_puup_20251122_100003')
+    zip_basename = os.path.basename(source_folder_path)
     
-    if not source_dir:
-        print("\nError: No 'whale_puup_...' folder found in the executable's directory.")
-        print("Please ensure you have run the nuget_extractor.py first.")
-        return
-
-    # Prepare the output name for the zip file
-    base_name = f"whale_puup_archive_{timestamp}"
-    
-    print(f"Found latest folder: '{os.path.basename(source_dir)}'")
-    print(f"Creating zip file: '{base_name}.zip'")
+    # 2. Define the output directory for the ZIP file (which is the source folder itself)
+    output_dir = source_folder_path 
     
     try:
-        # shutil.make_archive creates the zip file
-        # 'zip' is the format, base_name is the output name, and source_dir 
-        # is the directory to be compressed.
-        archive_path = shutil.make_archive(base_name, 'zip', root_dir=script_dir, base_dir=os.path.basename(source_dir))
+        # shutil.make_archive parameters:
+        # 1. base_name: The path/name of the output ZIP (WITHOUT the .zip extension)
+        # 2. format: 'zip'
+        # 3. root_dir: The directory *containing* the directory to be zipped (the parent folder)
+        # 4. base_dir: The directory *to be zipped* (the source folder name itself)
         
+        # We want to zip the *contents* of source_folder_path, 
+        # but we need the output file to land *inside* source_folder_path.
+        
+        # To do this, we create the ZIP file *temporarily* outside the folder, 
+        # then move it inside.
+        
+        # Temporary ZIP path in the parent directory
+        parent_dir = os.path.dirname(source_folder_path)
+        temp_zip_path = os.path.join(parent_dir, zip_basename) 
+        
+        # Archive the contents of the source folder
+        archive_path_with_ext = shutil.make_archive(
+            base_name=temp_zip_path,  # Output file name (temporarily outside)
+            format='zip',
+            root_dir=parent_dir,      # Start search in parent directory
+            base_dir=zip_basename     # Zip the contents of this folder inside root_dir
+        )
+        
+        # 3. Move the ZIP file into the source folder
+        final_zip_name = f"{zip_basename}.zip"
+        final_zip_path = os.path.join(source_folder_path, final_zip_name)
+        
+        # Move the newly created ZIP file into the source folder
+        shutil.move(archive_path_with_ext, final_zip_path)
+
         print("\n--- Summary ---")
-        print(f"SUCCESS: Archive created at '{os.path.abspath(archive_path)}'")
-        print(f"Contents of the folder '{os.path.basename(source_dir)}' are now securely zipped.")
+        print(f"SUCCESS: Archive created and placed inside its source folder.")
+        print(f"ZIP File location: '{final_zip_path}'")
+        
+        return final_zip_path
 
     except Exception as e:
         print(f"\nError creating zip archive: {e}")
-
+        return None
+    
 def create_readme_file(package_dependencies, output_folder):
     """Creates the 'readme_puup_file.txt' with documentation."""
     file_name = "readme_puup_file.txt"
@@ -317,105 +326,70 @@ def create_readme_file(package_dependencies, output_folder):
 
     return output_path
 
-#
-def create_final_archive(temp_folder, final_folder_path, package_count):
-    """Zips the downloaded files and renames the folder/zip."""
-    
-    # 1. Create the timestamped folder name
-    now = datetime.datetime.now()
-    # Format: YYYYMMDDHHMMSS (no colons or other symbols)
-    timestamp_str = now.strftime("%Y%m%d%H%M%S")
-    folder_name = f"whale_puup_{package_count}_krills_at_{timestamp_str}"
-    
-    final_output_path = os.path.join(final_folder_path, folder_name)
-    os.makedirs(final_output_path, exist_ok=True)
-    
-    print(f"\n🐳 Creating final output folder at: {final_output_path}")
-
-    # 2. Create the ZIP file
-    # The zip name is based on the folder name
-    base_zip_name = os.path.join(final_output_path, folder_name)
-    zip_path = shutil.make_archive(
-        base_name=base_zip_name, 
-        format='zip', 
-        root_dir=temp_folder # Zip the contents of the temporary folder
-    )
-
-    # 3. Rename the .zip to .txt as requested (Warning: This is for compliance only)
-    # NOTE: The content is still a ZIP archive, not plain text.
-    final_zip_name = f"{folder_name}.txt"
-    final_zip_path = os.path.join(final_output_path, final_zip_name)
-    os.rename(zip_path, final_zip_path)
-    
-    print(f"  📦 Zipped all content to: {final_zip_path}")
-    print(f"  ⚠️ Note: The file is a ZIP archive renamed to .txt.")
-    
-    return final_output_path
-
 def main():
     """Main method to orchestrate the entire process."""
-    while True:
-        try:
-            # Get list of nuget packages (comma-dilimited, possibly) and make into list
-            package_list_str = show_whale_prompt()
-            packages = [p.strip() for p in package_list_str.split(',') if p.strip()]
+    #while True:
+    try:
+        # Get list of nuget packages (comma-dilimited, possibly) and make into list
+        package_list_str = show_whale_prompt()
+        packages = [p.strip() for p in package_list_str.split(',') if p.strip()]
             
-            # If nothing in the packages break out to errors
-            if not packages:
-                print("\nProcess canceled.")
-                break
+        # If nothing in the packages break out to errors
+        if not packages:
+            print("\nProcess canceled.")
             
-            # Download packages to temp_folder; will be removed after
-            downloaded_count = download_nuget_packages(packages, TEMP_DOWNLOAD_FOLDER)
+        # Download packages to temp_folder; will be removed after
+        downloaded_count = download_nuget_packages(packages, TEMP_DOWNLOAD_FOLDER)
             
-            # If nothing was downloaded freak out
-            if downloaded_count == 0:
-                print("\nNo packages were successfully downloaded. Exiting.")
+        # If nothing was downloaded freak out
+        if downloaded_count == 0:
+            print("\nNo packages were successfully downloaded. Exiting.")
             
-            print("\nAll puup'd out.")
-            print("\nNow digesting.")
+        print("\nAll puup'd out. Now digesting...")
 
-            try:
-                # Create archive zip
-                final_folder = create_final_archive(
-                    temp_folder=TEMP_DOWNLOAD_FOLDER,
-                    final_folder_path=OUTPUT_BASE_PATH,
-                    package_count=downloaded_count
-                )
+        try:
+            # Extract nupkg files from temp downloads folder
+            source_folder_path = extract_nupkg_files()
+
+            # 1. Create archive zip and place it *inside* the source folder
+            final_zip_path = create_zip_archive(source_folder_path)
         
+            # 2. Use the returned path for success message
+            if final_zip_path:
                 # 5. Place the readme file inside the final folder
-                readme_path = create_readme_file(package_dependencies, final_folder)
-        
+                # readme_path = create_readme_file(package_dependencies, final_folder)
+            
                 print("\n\n" + "="*50)
                 print("🎉 WHALE-PUUP Operation Complete!")
-                print(f"Final output is located at: {final_folder}")
-                print(f"File listing dependencies: {os.path.basename(readme_path)}")
+                print(f"Final output is located at: {source_folder_path}")
+                print(f"ZIP archive is located at: {final_zip_path}")
                 print("="*50)
 
-            finally:
-                # Clean up temporary download folder
-                if os.path.exists(TEMP_DOWNLOAD_FOLDER):
-                    try:
-                        shutil.rmtree(TEMP_DOWNLOAD_FOLDER)
-                        print(f"\n🗑️ Cleaned up temporary folder: {TEMP_DOWNLOAD_FOLDER}")
-                    except OSError as e:
-                        print(f"  ⚠️ Warning: Could not remove temporary folder {TEMP_DOWNLOAD_FOLDER}. {e}")
-        except subprocess.CalledProcessError as e:
-            # 5. Handle the specific error thrown by subprocess (NuGet failure)
-            print("❌ DOWNLOAD FAILED. An error occurred while running nuget.exe.")
-            print(f"Error Message: {e.stderr.strip()}")
-            print("\nPlease check the package name, version, or network connection, and try again.")
+        finally:
+            # Clean up temporary download folder
+            if os.path.exists(TEMP_DOWNLOAD_FOLDER):
+                try:
+                    shutil.rmtree(TEMP_DOWNLOAD_FOLDER)
+                    print(f"\n🗑️ Cleaned up temporary folder: {TEMP_DOWNLOAD_FOLDER}")
+                except OSError as e:
+                    print(f"  ⚠️ Warning: Could not remove temporary folder {TEMP_DOWNLOAD_FOLDER}. {e}")
+                    
+    except subprocess.CalledProcessError as e:
+        # 5. Handle the specific error thrown by subprocess (NuGet failure)
+        print("❌ DOWNLOAD FAILED. An error occurred while running nuget.exe.")
+        print(f"Error Message: {e.stderr.strip()}")
+        print("\nPlease check the package name, version, or network connection, and try again.")
             
-        except FileNotFoundError:
-            # 6. Handle the error if nuget.exe itself can't be found
-            print(f"🛑 CRITICAL ERROR: Could not find nuget.exe at path: {NUGET_CMD}")
-            print("Please correct the path in the script and restart.")
-            sys.exit(1)
+    except FileNotFoundError:
+        # 6. Handle the error if nuget.exe itself can't be found
+        print(f"🛑 CRITICAL ERROR: Could not find nuget.exe at path: {NUGET_CMD}")
+        print("Please correct the path in the script and restart.")
+        sys.exit(1)
 
-        except Exception as e:
-            # 7. Catch any other unexpected errors
-            print(f"⚠️ An unexpected error occurred: {e}")
-            sys.exit(1)
+    except Exception as e:
+        # 7. Catch any other unexpected errors
+        print(f"⚠️ An unexpected error occurred: {e}")
+        sys.exit(1)
 
 
 
