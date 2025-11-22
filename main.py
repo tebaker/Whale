@@ -1,113 +1,75 @@
-﻿import sys
+﻿# main.py
+
+import sys
 import os
 import shutil
-import argparse
-import glob
-import xml.etree.ElementTree as ET
-import zipfile
 
+# Import from local modules
 from downloader import download_nuget_packages, TEMP_DOWNLOAD_FOLDER, NUGET_CMD
 from archiver import extract_nupkg_packages, create_zip_archive
+from utilities import show_whale_prompt
 
-# --- Configuration ---
+# --- Configuration (Centralized) ---
 OUTPUT_BASE_PATH = "final_archives"
-
-def show_whale_prompt():
-    """Displays the ASCII whale and prompts the user for package names."""
-    whale_ascii = r"""
-         ,.-"`^`-.
-        /   _   _  \
-       /   `(o)(o)` \
-      |         w  / |
-      | |   `----'| |
-      | |    .'"`^`".
-      \ \  / .'"`^`".\
-        \ `|  ./  ./
-          `'-----'`  
-    """
-    print("\n" + "="*50)
-    print("Welcome to WHALE-PUUP Download Utility!")
-    print(whale_ascii)
-    print("Please list the NuGet packages (comma-delimited) you need.")
-    print("Example: Newtonsoft.Json, Microsoft.Extensions.Logging")
-    print("="*50)
-    
-    # Check for command line arguments first
-    if len(sys.argv) > 1:
-        package_list_str = " ".join(sys.argv[1:])
-        print(f"Using packages from command line: {package_list_str}\n")
-    else:
-        package_list_str = input("Enter package names: ")
-    
-    return package_list_str.strip()
 
 def main():
     """Main method to orchestrate the entire process."""
-    while True:
-        try:
-            # Prompt user for nugets to download
-            package_list_str = show_whale_prompt()
-            packages = [p.strip() for p in package_list_str.split(',') if p.strip()]
-
-            # If nothing in the packages break out to errors
-            if not packages:
-                print("\nProcess canceled.")
-            
-            # Download packages to temp_folder; will be removed after
-            downloaded_count = download_nuget_packages(packages, TEMP_DOWNLOAD_FOLDER)
-            
-            # If nothing was downloaded freak out
-            if downloaded_count == 0:
-                print("\nNo packages were successfully downloaded. Exiting.")
-            
-            print("\nAll puup'd out. Now digesting...")
-
-            try:
-                # Extract nupkg packages from temp downloads folder
-                source_folder_path = extract_nupkg_packages()
-
-                # 1. Create archive zip and place it *inside* the source folder
-                final_zip_path = create_zip_archive(source_folder_path)
+    # Note: We remove the 'while True' loop here to ensure the script terminates 
+    # after one attempt, which is standard for command-line utilities.
+    # If the user wants to run again, they execute the script again.
+    
+    source_folder_path = None # Initialize variable for scope
+    
+    try:
+        # Prompt user for nugets to download. The function handles 'exit' input.
+        packages = show_whale_prompt() 
         
-                # 2. Use the returned path for success message
-                if final_zip_path:
-                    # 5. Place the readme file inside the final folder
-                    # readme_path = create_readme_file(package_dependencies, final_folder)
+        # Check for user cancellation or empty input (show_whale_prompt should return None or [] on cancel/invalid)
+        if not packages:
+            print("\nProcess canceled or no valid packages entered. Exiting.")
+            sys.exit(0) # Clean exit
             
-                    print("\n\n" + "="*50)
-                    print("🎉 WHALE-PUUP Operation Complete!")
-                    print(f"Final output is located at: {source_folder_path}")
-                    print(f"ZIP archive is located at: {final_zip_path}")
-                    print("="*50)
+        # --- PHASE 1: DOWNLOAD ---
+        downloaded_count = download_nuget_packages(packages, TEMP_DOWNLOAD_FOLDER)
+            
+        if downloaded_count == 0:
+            print("\n❌ No packages were successfully downloaded. Exiting with error.")
+            sys.exit(1) # Error exit
+            
+        print("\nAll puup'd out. Now digesting...")
 
-            finally:
-                # Clean up temporary download folder
-                if os.path.exists(TEMP_DOWNLOAD_FOLDER):
-                    try:
-                        shutil.rmtree(TEMP_DOWNLOAD_FOLDER)
-                        print(f"\n🗑️ Cleaned up temporary folder: {TEMP_DOWNLOAD_FOLDER}")
-                    except OSError as e:
-                        print(f"  ⚠️ Warning: Could not remove temporary folder {TEMP_DOWNLOAD_FOLDER}. {e}")
-                        
-        except Exception as e:
-            # 7. Catch any other unexpected errors
-            print(f"⚠️ An unexpected error occurred: {e}")
-            sys.exit(1)
+        # --- PHASE 2: EXTRACT & ARCHIVE ---
+        
+        # Extract nupkg packages from temp downloads folder
+        # NOTE: extract_nupkg_packages MUST return the absolute path to the output folder.
+        source_folder_path = extract_nupkg_packages()
 
+        # Create archive zip and place it *inside* the source folder
+        final_zip_path = create_zip_archive(source_folder_path)
+    
+        # --- PHASE 3: SUCCESS MESSAGE ---
+        if final_zip_path:
+            print("\n\n" + "="*50)
+            print("🎉 WHALE-PUUP Operation Complete!")
+            print(f"Final output folder: {source_folder_path}")
+            print(f"ZIP archive: {final_zip_path}")
+            print("="*50)
+        
+    except Exception as e:
+        # Catch any unexpected errors during the process
+        print(f"\n⚠️ A CRITICAL and unexpected error occurred: {e}")
+        print("Please check your input and configuration files.")
+        sys.exit(1) # Error exit
 
-
-
-
-
-
-
-
-
-
-
-
-
-
+    finally:
+        # --- PHASE 4: CLEANUP ---
+        # This runs regardless of success or failure in the 'try' block
+        if os.path.exists(TEMP_DOWNLOAD_FOLDER):
+            try:
+                shutil.rmtree(TEMP_DOWNLOAD_FOLDER)
+                print(f"\n🗑️ Cleaned up temporary folder: {TEMP_DOWNLOAD_FOLDER}")
+            except OSError as e:
+                print(f"  ⚠️ Warning: Could not remove temporary folder {TEMP_DOWNLOAD_FOLDER}. {e}")
+                
 if __name__ == "__main__":
     main()
-    

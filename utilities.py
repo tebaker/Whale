@@ -1,4 +1,59 @@
-﻿import os
+﻿import json
+import os
+import random
+import sys
+
+def show_whale_prompt():
+    """Displays a random ASCII whale from whales.json and prompts the user."""
+    
+    # 1. Define the path to the JSON file
+    # We use the script's directory (absolute path) to reliably find whales.json
+    script_dir = os.path.dirname(os.path.abspath(sys.argv[0]))
+    json_path = os.path.join(script_dir, "whales.json")
+
+    try:
+        # 2. Load the whales from the JSON file
+        with open(json_path, 'r') as f:
+            whale_config = json.load(f)
+            
+        # 3. Randomly select one whale
+        whale_key = random.choice(list(whale_config.keys()))
+        whale_ascii_lines = whale_config[whale_key]
+        
+        # Join the list of strings back into a single ASCII block
+        # using the newline character, adding a leading newline for spacing.
+        whale_ascii = "\n" + "\n".join(whale_ascii_lines)
+        
+    except FileNotFoundError:
+        print(f"⚠️ Warning: whales.json not found at {json_path}. Using fallback whale.")
+        whale_ascii = " (~^~)\\ " # A very small fallback whale
+    except Exception as e:
+        print(f"⚠️ Warning: Could not load whales.json: {e}. Using fallback whale.")
+        whale_ascii = " (~^~)\\ " # A very small fallback whale
+        
+    # --- Display the Prompt ---
+    print("\n" + "="*50)
+    print("Welcome to WHALE-PUUP Download Utility!")
+    print(whale_ascii)
+    print(f"--- Displaying the {whale_key.capitalize()} Whale ---") # Show which whale was chosen
+    print("Please list the NuGet packages (comma-delimited) you need (type 'exit' to quit).")
+    print("Example: Newtonsoft.Json, Microsoft.Extensions.Logging")
+    print("="*50)
+    
+    # Check if the user entered an exit command
+    if package_list_str.lower().strip() == 'exit':
+        # Signal cancellation
+        return None
+
+    # Check for command line arguments first
+    if len(sys.argv) > 1:
+        package_list_str = " ".join(sys.argv[1:])
+        print(f"Using packages from command line: {package_list_str}\n")
+    else:
+        package_list_str = input("Enter package names: ")
+    
+    return package_list_str.strip()
+
 
 def create_readme_file(package_dependencies, output_folder):
     """Creates the 'readme_puup_file.txt' with documentation."""
