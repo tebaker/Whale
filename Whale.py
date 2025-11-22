@@ -10,63 +10,11 @@ import xml.etree.ElementTree as ET
 # --- Configuration ---
 # You must have nuget.exe accessible in your system's PATH
 NUGET_CMD = r'C:\Program Files (x86)\NuGet\nuget.exe'
-TEMP_DOWNLOAD_FOLDER = "temp_nuget_downloads"
+# The base directory where all the temporary download folders reside.
+RAW_SOURCE_DIR_NAME = "temp_downloads"
 OUTPUT_BASE_PATH = "C:\\"
-
-def encode_file_to_base64(input_filepath, output_filepath):
-    """
-    Reads a binary file, encodes its content to Base64, and writes the
-    resulting ASCII string to a new output file.
-
-    The Base64 encoding process ensures that the binary data is converted
-    into a format safe for transmission or storage in text-only systems.
-    """
-    print(f"--- Encoding Process ---")
-    print(f"Input File: {input_filepath}")
-    
-    # --- 1. Read the input file in binary mode ---
-    try:
-        # Use 'rb' (read binary) mode to read the file as raw bytes.
-        with open(input_filepath, 'rb') as f:
-            binary_data = f.read()
-        print(f"Successfully read {len(binary_data)} bytes.")
-
-    except FileNotFoundError:
-        print(f"Error: The input file '{input_filepath}' was not found.")
-        return
-    except Exception as e:
-        print(f"An error occurred while reading the input file: {e}")
-        return
-
-    # --- 2. Encode the binary data to Base64 ---
-    # base64.b64encode takes a bytes object and returns an encoded bytes object.
-    encoded_bytes = base64.b64encode(binary_data)
-    
-    # Convert the encoded bytes (e.g., b'VGhpcyBpcy...') to a string
-    # using 'ascii' decoding, as Base64 output is always ASCII characters.
-    encoded_content = encoded_bytes.decode('ascii')
-    
-    print("Content successfully Base64 encoded.")
-
-    # --- 3. Write the Base64 string to the output file ---
-    try:
-        # Use 'w' (write text) mode to write the Base64 string.
-        with open(output_filepath, 'w') as f:
-            f.write(encoded_content)
-        
-        # Calculate size comparison
-        original_size_kb = os.path.getsize(input_filepath) / 1024
-        encoded_size_kb = os.path.getsize(output_filepath) / 1024
-        
-        print(f"Output File: {output_filepath}")
-        print(f"Original size: {original_size_kb:.2f} KB")
-        print(f"Encoded size: {encoded_size_kb:.2f} KB (Base64 adds ~33% overhead)")
-        print(f"\nSuccess! The Base64 encoded content is saved to '{output_filepath}'")
-
-    except Exception as e:
-        print(f"An error occurred while writing the output file: {e}")
-
-
+# The file extension we are looking for.
+TARGET_EXTENSION = ".nupkg"
 
 def show_whale_prompt():
     """Displays the ASCII whale and prompts the user for package names."""
@@ -96,105 +44,6 @@ def show_whale_prompt():
         package_list_str = input("Enter package names: ")
     
     return package_list_str.strip()
-
-# Download Logic
-def download_nuget_packages(packages, temp_folder):
-    """Executes nuget install for each package with recursive dependencies."""
-    if not packages:
-        print("No packages specified. Aborting download.")
-        return 0
-
-    os.makedirs(temp_folder, exist_ok=True)
-    success_count = 0
-    
-    print(f"\n🐋 Starting download of {len(packages)} packages into: {temp_folder}...")
-
-    for package_name in packages:
-        try:
-            # Command to install package and its dependencies recursively
-            command = [
-                NUGET_CMD, 
-                'install', 
-                package_name,
-                '-OutputDirectory', 
-                temp_folder, 
-                '-Recursive'
-            ]
-            
-            subprocess.run(command, check=True, capture_output=True, text=True)
-            print(f"  ✅ Downloaded: {package_name}")
-            success_count += 1
-            
-        except subprocess.CalledProcessError as e:
-            print(f"  ❌ ERROR downloading {package_name}. Check NuGet source/version.")
-            print(f"     Output: {e.stderr.strip()}")
-        except FileNotFoundError:
-            print(f"  ❌ ERROR: '{NUGET_CMD}' not found. Make sure nuget.exe is in your PATH.")
-            sys.exit(1)
-            
-    return success_count
-
-# --- STEP 3: DOCUMENTATION LOGIC ---
-
-def get_dependencies_from_local_folder(temp_folder):
-    """Parses local .nuspec files to extract dependency information."""
-    package_data = {}
-    
-    # Walk through the temp folder where packages are downloaded
-    for item in os.listdir(temp_folder):
-        item_path = os.path.join(temp_folder, item)
-        if os.path.isdir(item_path):
-            # Find the .nuspec file
-            nuspec_files = [f for f in os.listdir(item_path) if f.endswith('.nuspec')]
-            
-            if nuspec_files:
-                nuspec_path = os.path.join(item_path, nuspec_files[0])
-                package_name_version = item 
-                
-                try:
-                    tree = ET.parse(nuspec_path)
-                    root = tree.getroot()
-                    
-                    # Find metadata and dependencies nodes, handling different namespaces
-                    namespaces = [
-                        '{http://schemas.microsoft.com/packaging/2013/05/nuspec.xsd}',
-                        '{http://schemas.microsoft.com/packaging/2010/07/nuspec.xsd}'
-                    ]
-                    
-                    metadata_node = None
-                    dependencies_node = None
-                    
-                    for ns in namespaces:
-                        metadata_node = root.find(f'{ns}metadata')
-                        if metadata_node is not None:
-                            dependencies_node = metadata_node.find(f'{ns}dependencies')
-                            break
-
-                    dependencies = []
-                    if dependencies_node is not None:
-                        for dep_group in dependencies_node.findall(f'{ns}group'):
-                            # Handle dependency groups (e.g., for different target frameworks)
-                            target = dep_group.get('targetFramework', 'All Frameworks')
-                            dependencies.append(f"--- Group: {target} ---")
-                            for dep in dep_group.findall(f'{ns}dependency'):
-                                dep_id = dep.get('id')
-                                dep_version = dep.get('version', 'Any')
-                                dependencies.append(f"{dep_id} (Version: {dep_version})")
-                        
-                        # Handle flat dependencies
-                        if not dependencies: # Only check flat if groups weren't found/processed
-                             for dep in dependencies_node.findall(f'{ns}dependency'):
-                                dep_id = dep.get('id')
-                                dep_version = dep.get('version', 'Any')
-                                dependencies.append(f"{dep_id} (Version: {dep_version})")
-
-
-                    package_data[package_name_version] = dependencies
-
-                except Exception as e:
-                    package_data[package_name_version] = [f"Error reading dependencies: {e}"]
-
-    return package_data
 
 def create_readme_file(package_dependencies, output_folder):
     """Creates the 'readme_puup_file.txt' with documentation."""
@@ -226,8 +75,6 @@ def create_readme_file(package_dependencies, output_folder):
             f.write(f"* {dep_id}\n")
 
     return output_path
-
-# --- STEP 4: ZIPPING AND FINALIZATION ---
 
 def create_final_archive(temp_folder, final_folder_path, package_count):
     """Zips the downloaded files and renames the folder/zip."""
@@ -291,8 +138,7 @@ def download_packages(package_list, download_dir):
         
         except subprocess.CalledProcessError as e:
             # 1. Error handling: Print failure message
-            print("❌ DOWNLOAD FAILED.")
-            print(f"Error Message from NuGet: {e.stderr.strip()}")
+            print("❌ Nothing; I'm all backed up from {e.stderr.strip()}\n")
             print("Please check the package name or version.")
         
             # 2. Key Action: Exit the function and return control to the caller (main)
@@ -307,8 +153,141 @@ def download_packages(package_list, download_dir):
     # If successful, return the output (or a success indicator)
     return result.stdout
 
-# --- MAIN METHOD ---
-def main():
+def encode_file_to_base64(input_filepath, output_filepath):
+    """
+    Reads a binary file, encodes its content to Base64, and writes the
+    resulting ASCII string to a new output file.
+
+    The Base64 encoding process ensures that the binary data is converted
+    into a format safe for transmission or storage in text-only systems.
+    """
+    print(f"--- Encoding Process ---")
+    print(f"Input File: {input_filepath}")
+    
+    # --- 1. Read the input file in binary mode ---
+    try:
+        # Use 'rb' (read binary) mode to read the file as raw bytes.
+        with open(input_filepath, 'rb') as f:
+            binary_data = f.read()
+        print(f"Successfully read {len(binary_data)} bytes.")
+
+    except FileNotFoundError:
+        print(f"Error: The input file '{input_filepath}' was not found.")
+        return
+    except Exception as e:
+        print(f"An error occurred while reading the input file: {e}")
+        return
+
+    # --- 2. Encode the binary data to Base64 ---
+    # base64.b64encode takes a bytes object and returns an encoded bytes object.
+    encoded_bytes = base64.b64encode(binary_data)
+    
+    # Convert the encoded bytes (e.g., b'VGhpcyBpcy...') to a string
+    # using 'ascii' decoding, as Base64 output is always ASCII characters.
+    encoded_content = encoded_bytes.decode('ascii')
+    
+    print("Content successfully Base64 encoded.")
+
+    # --- 3. Write the Base64 string to the output file ---
+    try:
+        # Use 'w' (write text) mode to write the Base64 string.
+        with open(output_filepath, 'w') as f:
+            f.write(encoded_content)
+        
+        # Calculate size comparison
+        original_size_kb = os.path.getsize(input_filepath) / 1024
+        encoded_size_kb = os.path.getsize(output_filepath) / 1024
+        
+        print(f"Output File: {output_filepath}")
+        print(f"Original size: {original_size_kb:.2f} KB")
+        print(f"Encoded size: {encoded_size_kb:.2f} KB (Base64 adds ~33% overhead)")
+        print(f"\nSuccess! The Base64 encoded content is saved to '{output_filepath}'")
+
+    except Exception as e:
+        print(f"An error occurred while writing the output file: {e}")
+
+def extract_nupkg_files():
+    """
+    Scans subdirectories inside the 'temp_downloads' folder (relative to the
+    script's location) for matching .nuget files and copies them to a new, 
+    timestamped destination folder.
+    
+    This version correctly uses the executable's location to resolve paths, 
+    ensuring it works reliably when packaged as an EXE and passed to users.
+    """
+    
+    # 1. Determine the absolute path of the script's directory (EXE location)
+    # sys.argv[0] holds the path to the executing file. os.path.dirname 
+    # extracts the folder path from that file path.
+    script_dir = os.path.dirname(os.path.abspath(sys.argv[0]))
+    
+    # Construct the GUARANTEED input path: [EXE_DIR]/temp_downloads
+    SOURCE_BASE_DIR = os.path.join(script_dir, RAW_SOURCE_DIR_NAME)
+
+    
+    # 2. Generate the unique, timestamped destination folder name
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    # Construct the GUARANTEED output path: [EXE_DIR]/whale_puup_...
+    DESTINATION_DIR = os.path.join(script_dir, f"whale_puup_{timestamp}")
+    
+    # Check if the source directory exists
+    if not os.path.isdir(SOURCE_BASE_DIR):
+        print(f"Error: Source directory '{SOURCE_BASE_DIR}' not found.")
+        print(f"Please ensure the '{RAW_SOURCE_DIR_NAME}' folder is located in the same directory as this executable.")
+        return
+
+    # 3. Create the destination directory
+    try:
+        os.makedirs(DESTINATION_DIR, exist_ok=True)
+        print(f"Created destination folder: '{DESTINATION_DIR}'")
+    except Exception as e:
+        print(f"Error creating destination folder: {e}")
+        return
+
+    found_count = 0
+    
+    # 4. Iterate through all items in the SOURCE_BASE_DIR
+    for folder_name_raw in os.listdir(SOURCE_BASE_DIR):
+        
+        # We must use the raw folder name to access the folder path
+        sub_dir_path = os.path.join(SOURCE_BASE_DIR, folder_name_raw)
+
+        # Ensure the item is a directory before proceeding
+        if os.path.isdir(sub_dir_path):
+            
+            # Assume file name is EXACTLY the raw folder name + extension.
+            # This handles cases where directory names contain hidden whitespace.
+            expected_filename = f"{folder_name_raw}{TARGET_EXTENSION}"
+            source_file_path = os.path.join(sub_dir_path, expected_filename)
+            
+            # Print the path we are checking using os.path.join for clean separators
+            print(f"\nChecking path: {source_file_path}")
+
+            # 5. Check if the specific, expected file exists
+            if os.path.isfile(source_file_path):
+                # We strip the name for the final output folder to keep files clean.
+                clean_filename_for_copy = f"{folder_name_raw.strip()}{TARGET_EXTENSION}"
+                destination_file_path = os.path.join(DESTINATION_DIR, clean_filename_for_copy)
+                
+                # 6. Copy the file
+                try:
+                    # shutil.copy2 preserves file metadata
+                    shutil.copy2(source_file_path, destination_file_path)
+                    found_count += 1
+                    print(f"  -> SUCCESS: Copied '{clean_filename_for_copy}' to '{DESTINATION_DIR}'")
+                except Exception as e:
+                    print(f"  -> ERROR copying '{clean_filename_for_copy}': {e}")
+            else:
+                print(f"  -> File not found at expected location.")
+            
+    # 7. Final summary
+    print("\n--- Summary ---")
+    if found_count > 0:
+        print(f"Extraction complete! Copied {found_count} file(s) to '{DESTINATION_DIR}'")
+    else:
+        print(f"No matching {TARGET_EXTENSION} files were found.")
+
+def yee():
     """Main method to orchestrate the entire process."""
     while True:
         try:
@@ -321,12 +300,7 @@ def main():
             
             # 2. Call the function that might throw an exception
             output = download_packages(packages, 'temp_downloads')
-            
-            # 3. Success: If the function completes without raising an exception
-            print("✅ SUCCESS! Package and dependencies downloaded.")
-            # Optional: Print the success output
-            # print("--- Command Output ---\n", output)
-            
+         
             # 4. Break the loop only on success
             break 
             
@@ -348,18 +322,6 @@ def main():
             print("Retrying download...")
             
     print("\nAll puup'd out.")
-
-
-
-
-
-
-
-
-
-
-
-
 
     # 1. Get package input from user/command line
     
@@ -404,6 +366,9 @@ def main():
             except OSError as e:
                 print(f"  ⚠️ Warning: Could not remove temporary folder {TEMP_DOWNLOAD_FOLDER}. {e}")
 
+def main():
+    extract_nupkg_files()
 
 if __name__ == "__main__":
     main()
+    
