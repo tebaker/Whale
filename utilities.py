@@ -4,56 +4,58 @@ import random
 import sys
 
 def show_whale_prompt():
-    """Displays a random ASCII whale from whales.json and prompts the user."""
+    """Displays a random ASCII whale from whales.json and prompts the user for packages."""
     
-    # 1. Define the path to the JSON file
-    # We use the script's directory (absolute path) to reliably find whales.json
+    # --- Part 1: Load and Display Whale ---
+    
     script_dir = os.path.dirname(os.path.abspath(sys.argv[0]))
     json_path = os.path.join(script_dir, "whales.json")
-
+    whale_key = "fallback" # Initialize for clean output in case of error
+    
     try:
-        # 2. Load the whales from the JSON file
         with open(json_path, 'r') as f:
             whale_config = json.load(f)
-            
-        # 3. Randomly select one whale
         whale_key = random.choice(list(whale_config.keys()))
-        whale_ascii_lines = whale_config[whale_key]
+        whale_ascii = "\n" + "\n".join(whale_config[whale_key])
         
-        # Join the list of strings back into a single ASCII block
-        # using the newline character, adding a leading newline for spacing.
-        whale_ascii = "\n" + "\n".join(whale_ascii_lines)
+    except (FileNotFoundError, Exception) as e:
+        # Simplified error handling for display
+        whale_ascii = "\n (~^~)\\ " 
         
-    except FileNotFoundError:
-        print(f"⚠️ Warning: whales.json not found at {json_path}. Using fallback whale.")
-        whale_ascii = " (~^~)\\ " # A very small fallback whale
-    except Exception as e:
-        print(f"⚠️ Warning: Could not load whales.json: {e}. Using fallback whale.")
-        whale_ascii = " (~^~)\\ " # A very small fallback whale
-        
-    # --- Display the Prompt ---
     print("\n" + "="*50)
     print("Welcome to WHALE-PUUP Download Utility!")
     print(whale_ascii)
-    print(f"--- Displaying the {whale_key.capitalize()} Whale ---") # Show which whale was chosen
+    print(f"--- Displaying the {whale_key.capitalize()} Whale ---")
     print("Please list the NuGet packages (comma-delimited) you need (type 'exit' to quit).")
     print("Example: Newtonsoft.Json, Microsoft.Extensions.Logging")
     print("="*50)
-    
-    # Check if the user entered an exit command
-    if package_list_str.lower().strip() == 'exit':
-        # Signal cancellation
-        return None
 
-    # Check for command line arguments first
+    # Initialize package_list_str to an empty string to guarantee it exists
+    package_list_str = "" 
+
     if len(sys.argv) > 1:
+        # A. Command Line Arguments: Use arguments if provided
         package_list_str = " ".join(sys.argv[1:])
         print(f"Using packages from command line: {package_list_str}\n")
     else:
-        package_list_str = input("Enter package names: ")
+        # B. Interactive Prompt: Ask the user
+        package_list_str = input("🐋 Enter package name(s): ")
     
-    return package_list_str.strip()
+    # 1. Check for EXIT command immediately after getting the string
+    if package_list_str.lower().strip() == 'exit':
+        # Signal cancellation back to main()
+        return None 
+    
+    # Split by comma, remove whitespace, filter any empty entries
+    packages = [p.strip() for p in package_list_str.split(',') if p.strip()]
 
+    # Validate for good input after split
+    if not packages:
+        print("\n⚠️ Input contained only separators (commas) or was empty. Please try again.")
+        return None 
+        
+    # 4. Return the clean list of packages!
+    return packages
 
 def create_readme_file(package_dependencies, output_folder):
     """Creates the 'readme_puup_file.txt' with documentation."""

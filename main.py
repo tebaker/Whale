@@ -18,19 +18,19 @@ def main():
     # after one attempt, which is standard for command-line utilities.
     # If the user wants to run again, they execute the script again.
     
-    source_folder_path = None # Initialize variable for scope
+    package_list_str = None # Initialize variable for scope
     
     try:
         # Prompt user for nugets to download. The function handles 'exit' input.
-        packages = show_whale_prompt() 
+        package_list_str = show_whale_prompt() 
         
         # Check for user cancellation or empty input (show_whale_prompt should return None or [] on cancel/invalid)
-        if not packages:
+        if not package_list_str:
             print("\nProcess canceled or no valid packages entered. Exiting.")
             sys.exit(0) # Clean exit
             
         # --- PHASE 1: DOWNLOAD ---
-        downloaded_count = download_nuget_packages(packages, TEMP_DOWNLOAD_FOLDER)
+        downloaded_count = download_nuget_packages(package_list_str, TEMP_DOWNLOAD_FOLDER)
             
         if downloaded_count == 0:
             print("\n❌ No packages were successfully downloaded. Exiting with error.")
