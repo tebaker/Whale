@@ -11,8 +11,7 @@ import xml.etree.ElementTree as ET
 # You must have nuget.exe accessible in your system's PATH
 NUGET_CMD = r'C:\Program Files (x86)\NuGet\nuget.exe'
 # The base directory where all the temporary download folders reside.
-RAW_SOURCE_DIR_NAME = "temp_downloads"
-OUTPUT_BASE_PATH = "C:\\"
+TEMP_DOWNLOAD_FOLDER = "temp_downloads"
 # The file extension we are looking for.
 TARGET_EXTENSION = ".nupkg"
 
@@ -45,72 +44,7 @@ def show_whale_prompt():
     
     return package_list_str.strip()
 
-def create_readme_file(package_dependencies, output_folder):
-    """Creates the 'readme_puup_file.txt' with documentation."""
-    file_name = "readme_puup_file.txt"
-    output_path = os.path.join(output_folder, file_name)
-    
-    all_dependencies = set()
-    
-    with open(output_path, 'w') as f:
-        f.write("--- Downloaded NuGet Packages and Dependencies ---\n\n")
-        f.write(f"## 📦 Requested Packages and Their Dependencies ({len(package_dependencies)} items):\n")
-
-        for pkg, deps in package_dependencies.items():
-            f.write(f"* **{pkg}**\n")
-            if deps and not deps[0].startswith("Error"):
-                for dep in deps:
-                    f.write(f"  - {dep}\n")
-                    if not dep.startswith("--- Group:"):
-                        all_dependencies.add(dep.split(' (Version:')[0]) # Add just the ID
-            elif not deps:
-                 f.write(f"  - No direct dependencies listed in metadata.\n")
-            else:
-                f.write(f"  - {deps[0]}\n")
-        
-        f.write("\n" + "="*50 + "\n\n")
-        
-        f.write(f"## ⚙️ All Unique Dependencies Referenced ({len(all_dependencies)} items):\n")
-        for dep_id in sorted(list(all_dependencies)):
-            f.write(f"* {dep_id}\n")
-
-    return output_path
-
-def create_final_archive(temp_folder, final_folder_path, package_count):
-    """Zips the downloaded files and renames the folder/zip."""
-    
-    # 1. Create the timestamped folder name
-    now = datetime.datetime.now()
-    # Format: YYYYMMDDHHMMSS (no colons or other symbols)
-    timestamp_str = now.strftime("%Y%m%d%H%M%S")
-    folder_name = f"whale_puup_{package_count}_krills_at_{timestamp_str}"
-    
-    final_output_path = os.path.join(final_folder_path, folder_name)
-    os.makedirs(final_output_path, exist_ok=True)
-    
-    print(f"\n🐳 Creating final output folder at: {final_output_path}")
-
-    # 2. Create the ZIP file
-    # The zip name is based on the folder name
-    base_zip_name = os.path.join(final_output_path, folder_name)
-    zip_path = shutil.make_archive(
-        base_name=base_zip_name, 
-        format='zip', 
-        root_dir=temp_folder # Zip the contents of the temporary folder
-    )
-
-    # 3. Rename the .zip to .txt as requested (Warning: This is for compliance only)
-    # NOTE: The content is still a ZIP archive, not plain text.
-    final_zip_name = f"{folder_name}.txt"
-    final_zip_path = os.path.join(final_output_path, final_zip_name)
-    os.rename(zip_path, final_zip_path)
-    
-    print(f"  📦 Zipped all content to: {final_zip_path}")
-    print(f"  ⚠️ Note: The file is a ZIP archive renamed to .txt.")
-    
-    return final_output_path
-
-def download_packages(package_list, download_dir):
+def download_nuget_packages(package_list, download_dir):
     print("Puuping:\n")
     for package_name in package_list:
         """
@@ -222,7 +156,7 @@ def extract_nupkg_files():
     script_dir = os.path.dirname(os.path.abspath(sys.argv[0]))
     
     # Construct the GUARANTEED input path: [EXE_DIR]/temp_downloads
-    SOURCE_BASE_DIR = os.path.join(script_dir, RAW_SOURCE_DIR_NAME)
+    SOURCE_BASE_DIR = os.path.join(script_dir, TEMP_DOWNLOAD_FOLDER)
 
     
     # 2. Generate the unique, timestamped destination folder name
@@ -233,7 +167,7 @@ def extract_nupkg_files():
     # Check if the source directory exists
     if not os.path.isdir(SOURCE_BASE_DIR):
         print(f"Error: Source directory '{SOURCE_BASE_DIR}' not found.")
-        print(f"Please ensure the '{RAW_SOURCE_DIR_NAME}' folder is located in the same directory as this executable.")
+        print(f"Please ensure the '{TEMP_DOWNLOAD_FOLDER}' folder is located in the same directory as this executable.")
         return
 
     # 3. Create the destination directory
@@ -286,7 +220,6 @@ def extract_nupkg_files():
         print(f"Extraction complete! Copied {found_count} file(s) to '{DESTINATION_DIR}'")
     else:
         print(f"No matching {TARGET_EXTENSION} files were found.")
-
 
 def find_latest_whale_puup_folder(base_dir):
     """
@@ -353,6 +286,72 @@ def create_zip_archive():
     except Exception as e:
         print(f"\nError creating zip archive: {e}")
 
+def create_readme_file(package_dependencies, output_folder):
+    """Creates the 'readme_puup_file.txt' with documentation."""
+    file_name = "readme_puup_file.txt"
+    output_path = os.path.join(output_folder, file_name)
+    
+    all_dependencies = set()
+    
+    with open(output_path, 'w') as f:
+        f.write("--- Downloaded NuGet Packages and Dependencies ---\n\n")
+        f.write(f"## 📦 Requested Packages and Their Dependencies ({len(package_dependencies)} items):\n")
+
+        for pkg, deps in package_dependencies.items():
+            f.write(f"* **{pkg}**\n")
+            if deps and not deps[0].startswith("Error"):
+                for dep in deps:
+                    f.write(f"  - {dep}\n")
+                    if not dep.startswith("--- Group:"):
+                        all_dependencies.add(dep.split(' (Version:')[0]) # Add just the ID
+            elif not deps:
+                 f.write(f"  - No direct dependencies listed in metadata.\n")
+            else:
+                f.write(f"  - {deps[0]}\n")
+        
+        f.write("\n" + "="*50 + "\n\n")
+        
+        f.write(f"## ⚙️ All Unique Dependencies Referenced ({len(all_dependencies)} items):\n")
+        for dep_id in sorted(list(all_dependencies)):
+            f.write(f"* {dep_id}\n")
+
+    return output_path
+
+#
+def create_final_archive(temp_folder, final_folder_path, package_count):
+    """Zips the downloaded files and renames the folder/zip."""
+    
+    # 1. Create the timestamped folder name
+    now = datetime.datetime.now()
+    # Format: YYYYMMDDHHMMSS (no colons or other symbols)
+    timestamp_str = now.strftime("%Y%m%d%H%M%S")
+    folder_name = f"whale_puup_{package_count}_krills_at_{timestamp_str}"
+    
+    final_output_path = os.path.join(final_folder_path, folder_name)
+    os.makedirs(final_output_path, exist_ok=True)
+    
+    print(f"\n🐳 Creating final output folder at: {final_output_path}")
+
+    # 2. Create the ZIP file
+    # The zip name is based on the folder name
+    base_zip_name = os.path.join(final_output_path, folder_name)
+    zip_path = shutil.make_archive(
+        base_name=base_zip_name, 
+        format='zip', 
+        root_dir=temp_folder # Zip the contents of the temporary folder
+    )
+
+    # 3. Rename the .zip to .txt as requested (Warning: This is for compliance only)
+    # NOTE: The content is still a ZIP archive, not plain text.
+    final_zip_name = f"{folder_name}.txt"
+    final_zip_path = os.path.join(final_output_path, final_zip_name)
+    os.rename(zip_path, final_zip_path)
+    
+    print(f"  📦 Zipped all content to: {final_zip_path}")
+    print(f"  ⚠️ Note: The file is a ZIP archive renamed to .txt.")
+    
+    return final_output_path
+
 def main():
     """Main method to orchestrate the entire process."""
     while True:
@@ -361,16 +360,46 @@ def main():
             package_list_str = show_whale_prompt()
             packages = [p.strip() for p in package_list_str.split(',') if p.strip()]
             
+            # If nothing in the packages break out to errors
             if not packages:
                 print("\nProcess canceled.")
-                continue
+                break
             
-            # 2. Call the function that might throw an exception
-            output = download_packages(packages, 'temp_downloads')
-         
-            # 4. Break the loop only on success
-            break
+            # Download packages to temp_folder; will be removed after
+            downloaded_count = download_nuget_packages(packages, TEMP_DOWNLOAD_FOLDER)
             
+            # If nothing was downloaded freak out
+            if downloaded_count == 0:
+                print("\nNo packages were successfully downloaded. Exiting.")
+            
+            print("\nAll puup'd out.")
+            print("\nNow digesting.")
+
+            try:
+                # Create archive zip
+                final_folder = create_final_archive(
+                    temp_folder=TEMP_DOWNLOAD_FOLDER,
+                    final_folder_path=OUTPUT_BASE_PATH,
+                    package_count=downloaded_count
+                )
+        
+                # 5. Place the readme file inside the final folder
+                readme_path = create_readme_file(package_dependencies, final_folder)
+        
+                print("\n\n" + "="*50)
+                print("🎉 WHALE-PUUP Operation Complete!")
+                print(f"Final output is located at: {final_folder}")
+                print(f"File listing dependencies: {os.path.basename(readme_path)}")
+                print("="*50)
+
+            finally:
+                # Clean up temporary download folder
+                if os.path.exists(TEMP_DOWNLOAD_FOLDER):
+                    try:
+                        shutil.rmtree(TEMP_DOWNLOAD_FOLDER)
+                        print(f"\n🗑️ Cleaned up temporary folder: {TEMP_DOWNLOAD_FOLDER}")
+                    except OSError as e:
+                        print(f"  ⚠️ Warning: Could not remove temporary folder {TEMP_DOWNLOAD_FOLDER}. {e}")
         except subprocess.CalledProcessError as e:
             # 5. Handle the specific error thrown by subprocess (NuGet failure)
             print("❌ DOWNLOAD FAILED. An error occurred while running nuget.exe.")
@@ -381,57 +410,26 @@ def main():
             # 6. Handle the error if nuget.exe itself can't be found
             print(f"🛑 CRITICAL ERROR: Could not find nuget.exe at path: {NUGET_CMD}")
             print("Please correct the path in the script and restart.")
-            break # Exit the loop as this error is not recoverable by retrying
+            sys.exit(1)
 
         except Exception as e:
             # 7. Catch any other unexpected errors
             print(f"⚠️ An unexpected error occurred: {e}")
-            print("Retrying download...")
-            
-    print("\nAll puup'd out.")
+            sys.exit(1)
 
-    # 1. Get package input from user/command line
-    
-    package_list_str = show_whale_prompt()
-    packages = [p.strip() for p in package_list_str.split(',') if p.strip()]
-    if not packages:
-        print("\nProcess canceled.")
-        return
 
-    try:
-        # 2. Download packages to temp folder
-        downloaded_count = download_nuget_packages(packages, TEMP_DOWNLOAD_FOLDER)
-        if downloaded_count == 0:
-            print("\nNo packages were successfully downloaded. Exiting.")
-            return
 
-        # 3. Document dependencies
-        package_dependencies = get_dependencies_from_local_folder(TEMP_DOWNLOAD_FOLDER)
 
-        # 4. Create the final archive (Zip and rename)
-        final_folder = create_final_archive(
-            temp_folder=TEMP_DOWNLOAD_FOLDER,
-            final_folder_path=OUTPUT_BASE_PATH,
-            package_count=downloaded_count
-        )
-        
-        # 5. Place the readme file inside the final folder
-        readme_path = create_readme_file(package_dependencies, final_folder)
-        
-        print("\n\n" + "="*50)
-        print("🎉 WHALE-PUUP Operation Complete!")
-        print(f"Final output is located at: {final_folder}")
-        print(f"File listing dependencies: {os.path.basename(readme_path)}")
-        print("="*50)
 
-    finally:
-        # Clean up temporary download folder
-        if os.path.exists(TEMP_DOWNLOAD_FOLDER):
-            try:
-                shutil.rmtree(TEMP_DOWNLOAD_FOLDER)
-                print(f"\n🗑️ Cleaned up temporary folder: {TEMP_DOWNLOAD_FOLDER}")
-            except OSError as e:
-                print(f"  ⚠️ Warning: Could not remove temporary folder {TEMP_DOWNLOAD_FOLDER}. {e}")
+
+
+
+
+
+
+
+
+
 
 if __name__ == "__main__":
     main()
