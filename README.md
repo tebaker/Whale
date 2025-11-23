@@ -29,3 +29,15 @@ The final `whale-puup.exe` is generated within the `dist/` directory.
 ## 4. Repository Structure Note
 
 The `whale-puup.spec` file is committed to the repository to ensure identical, consistent, and reproducible builds of the executable across all environments and collaborators.
+
+                              . .,
+                            '.-:-.`
+                            '  :  `
+                       .------ |-:,
+                     .'        x   .
+                    .'              .
+                   .'                .
+                  .'                  .
+            ,     /                (o) \\----------
+            \\`._/                   ,__)
+      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
