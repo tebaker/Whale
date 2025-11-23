@@ -1,59 +1,67 @@
+# ==============================================================================
+# WHALE-PUUP Encoder Module (encoder.py)
+# Handles Base64 encoding of a file (e.g., a ZIP archive) and decoding a Base64
+# text file back into its original binary format.
+# ==============================================================================
+
 import base64
 import os
+# Assumes utilities.py exists for the color function
+import utilities 
 
-def encode_file_to_base64(input_filepath, output_filepath):
+def encode_file_to_base64(input_file_path, output_file_path):
     """
-    Reads a binary file, encodes its content to Base64, and writes the
-    resulting ASCII string to a new output file.
+    Reads a binary file, encodes its content to Base64, and writes it to a text file.
 
-    This function is designed to handle binary files (like the final ZIP archive)
-    and converts them into a text-safe Base64 string.
+    Args:
+        input_file_path (str): Path to the binary file (e.g., ZIP).
+        output_file_path (str): Path to the output text file (.txt).
     """
-    print(f"\n--- Base64 Encoding Process ---")
-    print(f"Input File: {input_filepath}")
-    
-    # --- 1. Read the input file in binary mode ---
     try:
-        # Use 'rb' (read binary) mode to read the file as raw bytes.
-        with open(input_filepath, 'rb') as f:
-            binary_data = f.read()
-        print(f"Successfully read {len(binary_data)} bytes.")
+        # Read the binary file
+        with open(input_file_path, 'rb') as input_file:
+            binary_data = input_file.read()
 
-    except FileNotFoundError:
-        print(f"Error: The input file '{input_filepath}' was not found.")
-        return
-    except Exception as e:
-        print(f"An error occurred while reading the input file: {e}")
-        return
+        # Encode the binary data to Base64
+        base64_data = base64.b64encode(binary_data)
 
-    # --- 2. Encode the binary data to Base64 ---
-    encoded_bytes = base64.b64encode(binary_data)
-    
-    # Convert the encoded bytes (e.g., b'VGhpcyBpcy...') to a string
-    encoded_content = encoded_bytes.decode('ascii')
-    
-    print("Content successfully Base64 encoded.")
-
-    # --- 3. Write the Base64 string to the output file ---
-    try:
-        # Use 'w' (write text) mode to write the Base64 string.
-        with open(output_filepath, 'w') as f:
-            f.write(encoded_content)
-        
-        # Calculate size comparison
-        original_size_bytes = os.path.getsize(input_filepath)
-        encoded_size_bytes = os.path.getsize(output_filepath)
-        
-        original_size_kb = original_size_bytes / 1024
-        encoded_size_kb = encoded_size_bytes / 1024
-        
-        print(f"Output File: {output_filepath}")
-        print(f"Original size: {original_size_kb:.2f} KB")
-        print(f"Encoded size: {encoded_size_kb:.2f} KB (Base64 adds ~33% overhead)")
-        print(f"\nSuccess! The Base64 encoded content is saved to '{output_filepath}'")
+        # Write the Base64 data (as bytes) to the output file
+        with open(output_file_path, 'wb') as output_file:
+            output_file.write(base64_data)
+            
+        print(utilities.color(f"Successfully encoded {os.path.basename(input_file_path)} to Base64.", "GREEN"))
 
     except Exception as e:
-        print(f"An error occurred while writing the output file: {e}")
+        print(utilities.color(f"[ERROR in Encoder] Failed to encode file {input_file_path}: {e}", "RED"))
 
-    # The function finishes without an explicit return, which implies return None
-    # but the primary goal is the side-effect (creating the file).
+
+def decode_file_from_base64(input_file_path, output_file_path):
+    """
+    Reads a Base64 text file, decodes its content, and writes the binary data 
+    to a new file (e.g., a ZIP archive).
+
+    Args:
+        input_file_path (str): Path to the Base64 text file (.txt).
+        output_file_path (str): Path to the output binary file (e.g., .zip).
+        
+    Returns:
+        bool: True if decoding was successful, False otherwise.
+    """
+    try:
+        # Read the Base64 data (as bytes)
+        with open(input_file_path, 'rb') as input_file:
+            base64_data = input_file.read()
+
+        # Decode the Base64 data back to binary
+        binary_data = base64.b64decode(base64_data)
+
+        # Write the resulting binary data to the output file
+        with open(output_file_path, 'wb') as output_file:
+            output_file.write(binary_data)
+            
+        print(utilities.color(f"Successfully decoded {os.path.basename(input_file_path)} to {os.path.basename(output_file_path)}.", "GREEN"))
+        return True
+
+    except Exception as e:
+        print(utilities.color(f"[ERROR in Decoder] Failed to decode file {input_file_path}: {e}", "RED"))
+        return False

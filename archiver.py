@@ -154,3 +154,80 @@ def create_zip_archive(source_folder_path):
     except Exception as e:
         print(f"\nError creating zip archive: {e}")
         return None
+
+# ==============================================================================
+# WHALE-PUUP Archiver Module (archiver.py)
+# Handles zipping a directory and encoding the resulting zip file into Base64.
+# ==============================================================================
+
+import os
+import shutil
+# IMPORTANT: These imports rely on other modules existing in the same directory.
+import encoder  # Assumes encoder.py has encode_file_to_base64
+import utilities # Assumes utilities.py has the color function
+
+def archive_and_encode_packages(source_dir, dest_folder):
+    """
+    Archives the content of the source directory into a ZIP file,
+    then encodes that ZIP file into a Base64 .txt file in the destination folder.
+
+    Args:
+        source_dir (str): The directory containing files to be zipped (either
+                          NuGet extracted content or user's local folder).
+        dest_folder (str): The final destination path for the ZIP and Base64 files.
+
+    Returns:
+        tuple (str, str): A tuple containing the paths to the final ZIP file
+                          and the final Base64 TXT file, or (None, None) on failure.
+    """
+    
+    zip_path = None
+    base64_output_path = None
+    
+    try:
+        if not os.path.exists(source_dir):
+            print(utilities.color(f"[ERROR] Source directory not found: {source_dir}", "RED"))
+            return None, None
+
+        # 1. --- Determine ZIP Filename ---
+        base_name = os.path.basename(source_dir)
+        zip_base = os.path.join(dest_folder, base_name)
+        
+        print(utilities.color(f"[ARCHIVE] Compressing contents of {base_name} into a ZIP...", "YELLOW"))
+
+        # 2. --- Create ZIP Archive ---
+        # shutil.make_archive handles creating the zip file from the directory content
+        shutil.make_archive(zip_base, 'zip', source_dir)
+        zip_path = zip_base + '.zip'
+        
+        if not os.path.exists(zip_path):
+            raise Exception("ZIP creation failed unexpectedly.")
+            
+        print(utilities.color(f"[ARCHIVE] ZIP Archive created successfully at: {zip_path}", "GREEN"))
+
+        # 3. --- BASE64 ENCODING ---
+        base64_output_path = zip_base + ".base64.txt"
+        
+        print(utilities.color(f"[ENCODE] Starting Base64 encoding of {os.path.basename(zip_path)}...", "CYAN"))
+
+        # Call the encoder module function to perform the Base64 conversion
+        encoder.encode_file_to_base64(zip_path, base64_output_path)
+        
+        print(utilities.color(f"[ENCODE] Base64 encoding complete. File saved to: {base64_output_path}", "GREEN"))
+
+        # 4. --- Cleanup (Remove the temporary ZIP file) ---
+        print(utilities.color(f"[CLEANUP] Removing intermediate ZIP file: {zip_path}", "YELLOW"))
+        os.remove(zip_path)
+
+        return zip_path, base64_output_path
+
+    except Exception as e:
+        print(utilities.color(f"[CRITICAL ERROR in Archiver] Processing failed: {e}", "RED"))
+        
+        # Cleanup routine if an error occurs mid-process
+        if zip_path and os.path.exists(zip_path):
+            os.remove(zip_path)
+        if base64_output_path and os.path.exists(base64_output_path):
+            os.remove(base64_output_path)
+            
+        return None, None
