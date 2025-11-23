@@ -9,7 +9,7 @@
                   .'                  .
             ,     /                (⚙︎) \----------.
             \`._/                    ,__)          | 
-      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~      ⚓︎
+      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~⚓︎~~~~~
 ## 1. Project Overview
 * **NuGet Archiving:** Automates download of specified NuGet packages, archives them to ZIP, encodes them to Base64.
 * **Folder Archiving:** Zips and converts a folder into Base64.
