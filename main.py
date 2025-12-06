@@ -49,12 +49,6 @@ def run_nuget_mode():
 
         if not download_dir:
             raise Exception("NuGet download or extraction failed.")
-
-        # 3. --- ARCHIVE AND ENCODE ---
-        zip_path, base64_output_path = archiver.archive_and_encode_packages(
-            source_dir=download_dir,
-            dest_folder=OUTPUT_BASE_PATH
-        )
         
         if zip_path is None or base64_output_path is None:
             raise Exception("Archiving and encoding failed.")
